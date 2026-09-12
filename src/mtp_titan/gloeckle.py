@@ -13,6 +13,10 @@ from torchtitan.models.common.attention import (
 )
 from torchtitan.models.common.decoder_sharding import decoder_input_sharding
 from torchtitan.models.llama3.model import Llama3Model
+from torchtitan.models.utils import (
+    get_nparams_and_active_nparams,
+    quadratic_attention_flops_per_token,
+)
 from torchtitan.protocols.module import Module, ModuleDict
 from torchtitan.components.loss import IGNORE_INDEX
 
@@ -28,7 +32,22 @@ class GloeckleModel(Llama3Model):
         def get_nparams_and_flops(
             self, model: Module, seq_len: int
         ) -> tuple[int, int]:
-            raise NotImplementedError
+            nparams, active_nparams = get_nparams_and_active_nparams(model)
+            attention_op_flops = 0
+            for block in list(self.layers) + list(self.heads):
+                attention = block.attention
+                head_dim = (
+                    attention.head_dim
+                    if attention.head_dim is not None
+                    else attention.dim // attention.n_heads
+                )
+                attention_op_flops += quadratic_attention_flops_per_token(
+                    num_heads=attention.n_heads,
+                    qk_head_dim=head_dim,
+                    v_head_dim=head_dim,
+                    seq_len=seq_len,
+                )
+            return nparams, 6 * active_nparams + attention_op_flops
 
     def __init__(self, config: Config):
         super().__init__(config)

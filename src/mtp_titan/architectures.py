@@ -22,6 +22,8 @@ from torchtitan.models.llama3.parallelize import parallelize_llama
 from torchtitan.models.llama3.state_dict_adapter import Llama3StateDictAdapter
 from torchtitan.protocols.model_spec import ModelSpec
 
+from .gloeckle import GloeckleModel
+
 HEAD_DIM = 64
 FFN_MULTIPLE_OF = 256
 ROPE_THETA = 10000.0
@@ -157,6 +159,64 @@ def model_spec(
         flavor=shape_name,
         model=model_config(
             shape_name,
+            vocab_size=vocab_size,
+            seq_len=seq_len,
+            attn_backend=attn_backend,
+        ),
+        max_context_length=seq_len,
+        parallelize_fn=parallelize_llama,
+        pipelining_fn=pipeline_llm,
+        post_optimizer_build_fn=None,
+        state_dict_adapter=Llama3StateDictAdapter,
+    )
+
+
+def gloeckle_model_config(
+    shape_name: str,
+    *,
+    num_heads: int,
+    vocab_size: int,
+    seq_len: int,
+    attn_backend: str = "flex",
+) -> GloeckleModel.Config:
+    dense = model_config(
+        shape_name,
+        vocab_size=vocab_size,
+        seq_len=seq_len,
+        attn_backend=attn_backend,
+    )
+    trunk_depth = len(dense.layers) - num_heads
+    if trunk_depth < 1:
+        raise ValueError(
+            f"shape {shape_name!r} has {len(dense.layers)} blocks, "
+            f"too few for {num_heads} heads"
+        )
+    return GloeckleModel.Config(
+        dim=dense.dim,
+        vocab_size=dense.vocab_size,
+        enable_weight_tying=dense.enable_weight_tying,
+        tok_embeddings=dense.tok_embeddings,
+        norm=dense.norm,
+        lm_head=dense.lm_head,
+        layers=dense.layers[:trunk_depth],
+        heads=dense.layers[trunk_depth:],
+    )
+
+
+def gloeckle_model_spec(
+    shape_name: str,
+    *,
+    num_heads: int,
+    vocab_size: int,
+    seq_len: int,
+    attn_backend: str = "flex",
+) -> ModelSpec:
+    return ModelSpec(
+        name="mtp_titan_gloeckle",
+        flavor=f"{shape_name}_n{num_heads}",
+        model=gloeckle_model_config(
+            shape_name,
+            num_heads=num_heads,
             vocab_size=vocab_size,
             seq_len=seq_len,
             attn_backend=attn_backend,

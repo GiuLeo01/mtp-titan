@@ -9,7 +9,7 @@ from torchtitan.components.data import (
     HuggingFaceStreamingSource,
     SingleDatasetConfig,
 )
-from torchtitan.components.loss import ChunkedLossWrapper, CrossEntropyLoss
+from torchtitan.components.loss import BaseLoss, ChunkedLossWrapper, CrossEntropyLoss
 from torchtitan.components.metrics import MetricsProcessor
 from torchtitan.components.optimizer import default_adamw, LRSchedulersContainer
 from torchtitan.components.validate import Validator
@@ -17,7 +17,10 @@ from torchtitan.config import DebugConfig, ParallelismConfig, TrainingConfig
 from torchtitan.hf_datasets.text_datasets import TextProcessor
 from torchtitan.trainer import Trainer
 
-from .architectures import model_spec, SHAPES
+from torchtitan.protocols.model_spec import ModelSpec
+
+from .architectures import gloeckle_model_spec, model_spec, SHAPES
+from .loss import GloeckleLoss
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TORCHTITAN_ROOT = Path(torchtitan.__file__).resolve().parents[1]
@@ -36,6 +39,8 @@ LR_ANCHOR_VALUE = 8e-4
 
 DEBUG_TOKENIZER_PATH = str(TORCHTITAN_ROOT / "tests" / "assets" / "tokenizer")
 DEBUG_VOCAB_SIZE = 2048
+
+GLOECKLE_NUM_HEADS = 2
 
 STARCODER_SHARD_COUNT = 59
 STARCODER_VALIDATION_SHARDS = (58,)
@@ -89,25 +94,23 @@ def chinchilla_steps(shape_name: str) -> int:
     return tokens // TOKENS_PER_TRAIN_STEP
 
 
-def _baseline(
+def _recipe(
     shape_name: str,
     *,
-    vocab_size: int,
+    spec: ModelSpec,
+    loss: BaseLoss.Config,
     hf_assets_path: str,
     train_dataset: SingleDatasetConfig,
     validation_dataset: SingleDatasetConfig,
     steps: int,
     seed: int,
 ) -> Trainer.Config:
-    spec = model_spec(shape_name, vocab_size=vocab_size, seq_len=SEQ_LEN)
     packed_train = ConcatThenSplitPackingConfig(dataset=train_dataset)
     packed_validation = ConcatThenSplitPackingConfig(dataset=validation_dataset)
     return Trainer.Config(
         model_spec=spec,
         hf_assets_path=hf_assets_path,
-        loss=ChunkedLossWrapper.Config(
-            loss_fn=CrossEntropyLoss.Config(global_vocab_size=vocab_size),
-        ),
+        loss=loss,
         optimizer=default_adamw(lr=scaled_learning_rate(SHAPES[shape_name].dim)),
         lr_scheduler=LRSchedulersContainer.Config(
             warmup_steps=max(steps // 100, 1),
@@ -138,6 +141,58 @@ def _baseline(
         metrics=MetricsProcessor.Config(log_freq=10),
         checkpoint=CheckpointManager.Config(interval=max(steps // 4, 1)),
         activation_checkpoint=None,
+    )
+
+
+def _baseline(
+    shape_name: str,
+    *,
+    vocab_size: int,
+    hf_assets_path: str,
+    train_dataset: SingleDatasetConfig,
+    validation_dataset: SingleDatasetConfig,
+    steps: int,
+    seed: int,
+) -> Trainer.Config:
+    return _recipe(
+        shape_name,
+        spec=model_spec(shape_name, vocab_size=vocab_size, seq_len=SEQ_LEN),
+        loss=ChunkedLossWrapper.Config(
+            loss_fn=CrossEntropyLoss.Config(global_vocab_size=vocab_size),
+        ),
+        hf_assets_path=hf_assets_path,
+        train_dataset=train_dataset,
+        validation_dataset=validation_dataset,
+        steps=steps,
+        seed=seed,
+    )
+
+
+def _gloeckle(
+    shape_name: str,
+    *,
+    num_heads: int,
+    vocab_size: int,
+    hf_assets_path: str,
+    train_dataset: SingleDatasetConfig,
+    validation_dataset: SingleDatasetConfig,
+    steps: int,
+    seed: int,
+) -> Trainer.Config:
+    return _recipe(
+        shape_name,
+        spec=gloeckle_model_spec(
+            shape_name,
+            num_heads=num_heads,
+            vocab_size=vocab_size,
+            seq_len=SEQ_LEN,
+        ),
+        loss=GloeckleLoss.Config(global_vocab_size=vocab_size),
+        hf_assets_path=hf_assets_path,
+        train_dataset=train_dataset,
+        validation_dataset=validation_dataset,
+        steps=steps,
+        seed=seed,
     )
 
 
@@ -180,6 +235,48 @@ def baseline_101m(seed: int = 0) -> Trainer.Config:
 def baseline_smoke(seed: int = 0) -> Trainer.Config:
     config = _baseline(
         "debug",
+        vocab_size=DEBUG_VOCAB_SIZE,
+        hf_assets_path=DEBUG_TOKENIZER_PATH,
+        train_dataset=SMOKE_CORPUS,
+        validation_dataset=SMOKE_CORPUS,
+        steps=20,
+        seed=seed,
+    )
+    config.parallelism = ParallelismConfig()
+    config.metrics.log_freq = 1
+    return config
+
+
+def gloeckle_57m(seed: int = 0) -> Trainer.Config:
+    return _gloeckle(
+        "57m",
+        num_heads=GLOECKLE_NUM_HEADS,
+        vocab_size=VOCAB_SIZE,
+        hf_assets_path=TOKENIZER_PATH,
+        train_dataset=STARCODER_PYTHON_TRAIN,
+        validation_dataset=STARCODER_PYTHON_VALIDATION,
+        steps=chinchilla_steps("57m"),
+        seed=seed,
+    )
+
+
+def gloeckle_57m_n4(seed: int = 0) -> Trainer.Config:
+    return _gloeckle(
+        "57m",
+        num_heads=4,
+        vocab_size=VOCAB_SIZE,
+        hf_assets_path=TOKENIZER_PATH,
+        train_dataset=STARCODER_PYTHON_TRAIN,
+        validation_dataset=STARCODER_PYTHON_VALIDATION,
+        steps=chinchilla_steps("57m"),
+        seed=seed,
+    )
+
+
+def gloeckle_smoke(seed: int = 0) -> Trainer.Config:
+    config = _gloeckle(
+        "debug",
+        num_heads=GLOECKLE_NUM_HEADS,
         vocab_size=DEBUG_VOCAB_SIZE,
         hf_assets_path=DEBUG_TOKENIZER_PATH,
         train_dataset=SMOKE_CORPUS,
