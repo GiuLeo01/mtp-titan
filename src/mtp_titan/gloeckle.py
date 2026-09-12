@@ -39,6 +39,7 @@ class GloeckleModel(Llama3Model):
         positions: torch.Tensor | None,
         attention_masks: AttentionMasksType | None,
     ) -> torch.Tensor:
+        # based on the common decoder class, but without the lm_head, which will be applied in the mtp heads 
 
         h = self.tok_embeddings(tokens) if self.tok_embeddings is not None else tokens
 
