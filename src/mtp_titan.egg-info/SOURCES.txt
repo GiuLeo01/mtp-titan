@@ -1,0 +1,8 @@
+pyproject.toml
+src/mtp_titan/__init__.py
+src/mtp_titan/architectures.py
+src/mtp_titan/config_registry.py
+src/mtp_titan.egg-info/PKG-INFO
+src/mtp_titan.egg-info/SOURCES.txt
+src/mtp_titan.egg-info/dependency_links.txt
+src/mtp_titan.egg-info/top_level.txt
