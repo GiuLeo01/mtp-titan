@@ -55,7 +55,20 @@ class GloeckleModel(Llama3Model):
         positions: torch.Tensor | None = None,
         attention_masks: AttentionMasksType | None = None,
     ) -> tuple[torch.Tensor, ...]:
-        raise NotImplementedError
+        
+        h_trunk = self.trunk_hidden_states(tokens, positions, attention_masks)
+
+        logits = []
+        for mtp_head in self.heads.values():
+            h_head = mtp_head(h_trunk, attention_masks, positions)
+            h_head = self.norm(h_head)
+            logits_head = self.lm_head(h_head)
+            logits.append(logits_head)
+        
+        return tuple(logits)
+
+
+
 
     def preprocess_inputs(
         self,
