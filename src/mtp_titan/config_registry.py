@@ -302,6 +302,14 @@ def gloeckle_smoke(seed: int = 0) -> Trainer.Config:
     return config
 
 
+
+def baseline_57m_seed1() -> Trainer.Config:
+    return baseline_57m(seed=1)
+
+
+def gloeckle_57m_seed1() -> Trainer.Config:
+    return gloeckle_57m(seed=1)
+
 def _for_profiling(config: Trainer.Config) -> Trainer.Config:
     config.parallelism = ParallelismConfig()
     config.training.steps = PROFILE_STEPS
