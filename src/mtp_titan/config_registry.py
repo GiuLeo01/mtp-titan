@@ -10,7 +10,6 @@ from torchtitan.components.data import (
     SingleDatasetConfig,
 )
 from torchtitan.components.loss import BaseLoss, ChunkedLossWrapper, CrossEntropyLoss
-from torchtitan.components.metrics import MetricsProcessor
 from torchtitan.components.optimizer import default_adamw, LRSchedulersContainer
 from torchtitan.components.validate import Validator
 from torchtitan.config import DebugConfig, ParallelismConfig, TrainingConfig
@@ -21,6 +20,7 @@ from torchtitan.protocols.model_spec import ModelSpec
 
 from .architectures import gloeckle_model_spec, model_spec, SHAPES
 from .loss import GloeckleLoss
+from .metrics import MtpMetricsProcessor
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TORCHTITAN_ROOT = Path(torchtitan.__file__).resolve().parents[1]
@@ -99,6 +99,7 @@ def _recipe(
     *,
     spec: ModelSpec,
     loss: BaseLoss.Config,
+    run_name: str,
     hf_assets_path: str,
     train_dataset: SingleDatasetConfig,
     validation_dataset: SingleDatasetConfig,
@@ -138,7 +139,9 @@ def _recipe(
                 dataset=packed_validation, shuffle=False, seed=seed
             ),
         ),
-        metrics=MetricsProcessor.Config(log_freq=10),
+        metrics=MtpMetricsProcessor.Config(
+            log_freq=10, enable_wandb=True, run_name=run_name
+        ),
         checkpoint=CheckpointManager.Config(interval=max(steps // 4, 1)),
         activation_checkpoint=None,
     )
@@ -160,6 +163,7 @@ def _baseline(
         loss=ChunkedLossWrapper.Config(
             loss_fn=CrossEntropyLoss.Config(global_vocab_size=vocab_size),
         ),
+        run_name=f"baseline-{shape_name}-seed{seed}",
         hf_assets_path=hf_assets_path,
         train_dataset=train_dataset,
         validation_dataset=validation_dataset,
@@ -188,6 +192,7 @@ def _gloeckle(
             seq_len=SEQ_LEN,
         ),
         loss=GloeckleLoss.Config(global_vocab_size=vocab_size),
+        run_name=f"gloeckle-{shape_name}-n{num_heads}-seed{seed}",
         hf_assets_path=hf_assets_path,
         train_dataset=train_dataset,
         validation_dataset=validation_dataset,
@@ -244,6 +249,7 @@ def baseline_smoke(seed: int = 0) -> Trainer.Config:
     )
     config.parallelism = ParallelismConfig()
     config.metrics.log_freq = 1
+    config.metrics.enable_wandb = False
     return config
 
 
@@ -286,4 +292,5 @@ def gloeckle_smoke(seed: int = 0) -> Trainer.Config:
     )
     config.parallelism = ParallelismConfig()
     config.metrics.log_freq = 1
+    config.metrics.enable_wandb = False
     return config
