@@ -1,0 +1,16 @@
+--extra-index-url https://download.pytorch.org/whl/cu130
+
+torch==2.14.0+cu130
+
+grain==0.2.18
+datasets==4.7.0
+tensorboard==2.21.0
+wandb==0.30.0
+tyro==1.0.16
+tokenizers==0.23.2
+safetensors==0.8.0
+einops==0.8.2
+pillow==12.3.0
+spmd_types==0.2.5
+attn-gym[linear]==0.0.8
+torch_remat @ git+https://github.com/meta-pytorch/remat.git@d302699b1c58f83fa2c7b03bc2593967e9530335

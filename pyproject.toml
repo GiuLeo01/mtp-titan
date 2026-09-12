@@ -1,0 +1,12 @@
+[project]
+name = "mtp-titan"
+version = "0.1.0"
+description = "Multi-token prediction heads for torchtitan"
+requires-python = ">=3.11"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
