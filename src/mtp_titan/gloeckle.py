@@ -122,6 +122,7 @@ class GloeckleModel(Llama3Model):
 
         inputs = batch.pop("input")
         base_labels = batch.pop("labels")
+        positions = batch.get("positions", None)
 
         labels_list = [base_labels,]
 
@@ -129,6 +130,12 @@ class GloeckleModel(Llama3Model):
             shifted_labels = torch.cat([
                 base_labels[i:], torch.full((i,), IGNORE_INDEX, dtype=base_labels.dtype, device=base_labels.device)
             ])
+
+            new_seqs = torch.where(positions[1:] == 0)[0] + 1
+
+            for j in new_seqs:
+                shifted_labels[(j-i):j] = IGNORE_INDEX 
+
             labels_list.append(shifted_labels)
         
         return inputs, tuple(labels_list), batch
