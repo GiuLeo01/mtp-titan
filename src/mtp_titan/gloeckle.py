@@ -5,9 +5,16 @@ import torch
 
 from torchtitan.config import ParallelismConfig
 from torchtitan.distributed.parallel_dims import ParallelDims
-from torchtitan.models.common.attention import AttentionMasksType
+from torchtitan.distributed.spmd_types import annotate_input_spmd_types
+from torchtitan.models.common.attention import (
+    AttentionMasksType,
+    FlexAttention,
+    VarlenAttention,
+)
+from torchtitan.models.common.decoder_sharding import decoder_input_sharding
 from torchtitan.models.llama3.model import Llama3Model
 from torchtitan.protocols.module import Module, ModuleDict
+from torchtitan.components.loss import IGNORE_INDEX
 
 
 class GloeckleModel(Llama3Model):
@@ -83,4 +90,45 @@ class GloeckleModel(Llama3Model):
         torch.Tensor | tuple[torch.Tensor, ...],
         dict[str, Any],
     ]:
-        raise NotImplementedError
+        from torchtitan.distributed.context_parallel.api import (
+            prepare_context_parallel_input,
+        )
+
+        batch: dict[str, Any] = dict(input_dict)
+        positions = batch.get("positions", None)
+        padding_mask = batch.pop("padding_mask", None)
+
+        if positions is not None:
+            inner = self.config.first_full_attention_backend
+            if isinstance(inner, (FlexAttention.Config, VarlenAttention.Config)):
+                batch["attention_masks"] = self.get_attention_masks(
+                    positions=positions,
+                    padding_mask=padding_mask,
+                    max_num_documents=max_num_documents,
+                    max_context_length=max_context_length,
+                )
+        
+        input_sharding = decoder_input_sharding()
+        if parallel_dims.cp_enabled:
+            batch = prepare_context_parallel_input(
+                batch,
+                input_sharding,
+                parallel_dims.get_mesh("cp"),
+                parallelism.context_parallel_load_balancer,
+                parallelism.context_parallel_ptrr_mask_key,
+            )
+        if parallelism.spmd_backend == "spmd_types":
+            batch = annotate_input_spmd_types(parallel_dims, batch, input_sharding)
+
+        inputs = batch.pop("input")
+        base_labels = batch.pop("labels")
+
+        labels_list = [base_labels,]
+
+        for i in range(1, self.num_heads):
+            shifted_labels = torch.cat([
+                base_labels[i:], torch.full((i,), IGNORE_INDEX, dtype=base_labels.dtype, device=base_labels.device)
+            ])
+            labels_list.append(shifted_labels)
+        
+        return inputs, tuple(labels_list), batch
