@@ -131,7 +131,7 @@ def _recipe(
         ),
         debug=DebugConfig(seed=seed),
         parallelism=ParallelismConfig(
-            data_parallel_replicate_degree=8,
+            data_parallel_replicate_degree=1,
             data_parallel_shard_degree=1,
         ),
         dataloader=GrainDataLoader.Config(dataset=packed_train, shuffle=True, seed=seed),
