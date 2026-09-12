@@ -14,6 +14,7 @@ from torchtitan.components.optimizer import default_adamw, LRSchedulersContainer
 from torchtitan.components.validate import Validator
 from torchtitan.config import DebugConfig, ParallelismConfig, TrainingConfig
 from torchtitan.hf_datasets.text_datasets import TextProcessor
+from torchtitan.tools.profiler import Profiler
 from torchtitan.trainer import Trainer
 
 from torchtitan.protocols.model_spec import ModelSpec
@@ -41,6 +42,9 @@ DEBUG_TOKENIZER_PATH = str(TORCHTITAN_ROOT / "tests" / "assets" / "tokenizer")
 DEBUG_VOCAB_SIZE = 2048
 
 GLOECKLE_NUM_HEADS = 2
+
+PROFILE_STEPS = 30
+PROFILE_FREQ = 10
 
 STARCODER_SHARD_COUNT = 59
 STARCODER_VALIDATION_SHARDS = (58,)
@@ -142,7 +146,9 @@ def _recipe(
         metrics=MtpMetricsProcessor.Config(
             log_freq=10, enable_wandb=True, run_name=run_name
         ),
-        checkpoint=CheckpointManager.Config(interval=max(steps // 4, 1)),
+        checkpoint=CheckpointManager.Config(
+            enable=True, interval=max(steps // 4, 1)
+        ),
         activation_checkpoint=None,
     )
 
@@ -294,3 +300,34 @@ def gloeckle_smoke(seed: int = 0) -> Trainer.Config:
     config.metrics.log_freq = 1
     config.metrics.enable_wandb = False
     return config
+
+
+def _for_profiling(config: Trainer.Config) -> Trainer.Config:
+    config.parallelism = ParallelismConfig()
+    config.training.steps = PROFILE_STEPS
+    config.profiler = Profiler.Config(
+        enable_profiling=True,
+        profile_freq=PROFILE_FREQ,
+        enable_memory_snapshot=True,
+    )
+    config.metrics.log_freq = 1
+    config.metrics.enable_wandb = False
+    config.checkpoint.enable = False
+    config.validator.enable = False
+    return config
+
+
+def baseline_57m_profile(seed: int = 0) -> Trainer.Config:
+    return _for_profiling(baseline_57m(seed=seed))
+
+
+def gloeckle_57m_profile(seed: int = 0) -> Trainer.Config:
+    return _for_profiling(gloeckle_57m(seed=seed))
+
+
+def gloeckle_57m_n4_profile(seed: int = 0) -> Trainer.Config:
+    return _for_profiling(gloeckle_57m_n4(seed=seed))
+
+
+def gloeckle_smoke_profile(seed: int = 0) -> Trainer.Config:
+    return _for_profiling(gloeckle_smoke(seed=seed))
