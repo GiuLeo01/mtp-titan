@@ -22,6 +22,7 @@ from torchtitan.models.llama3.parallelize import parallelize_llama
 from torchtitan.models.llama3.state_dict_adapter import Llama3StateDictAdapter
 from torchtitan.protocols.model_spec import ModelSpec
 
+from .deepseek import DeepSeekModel, DeepSeekMtpModule
 from .gloeckle import GloeckleModel
 
 HEAD_DIM = 64
@@ -200,6 +201,80 @@ def gloeckle_model_config(
         lm_head=dense.lm_head,
         layers=dense.layers[:trunk_depth],
         heads=dense.layers[trunk_depth:],
+    )
+
+
+def deepseek_model_config(
+    shape_name: str,
+    *,
+    num_modules: int,
+    vocab_size: int,
+    seq_len: int,
+    attn_backend: str = "flex",
+) -> DeepSeekModel.Config:
+    dense = model_config(
+        shape_name,
+        vocab_size=vocab_size,
+        seq_len=seq_len,
+        attn_backend=attn_backend,
+    )
+    trunk_depth = len(dense.layers) - num_modules
+    if trunk_depth < 1:
+        raise ValueError(
+            f"shape {shape_name!r} has {len(dense.layers)} blocks, "
+            f"too few for {num_modules} mtp modules"
+        )
+    return DeepSeekModel.Config(
+        dim=dense.dim,
+        vocab_size=dense.vocab_size,
+        enable_weight_tying=dense.enable_weight_tying,
+        tok_embeddings=dense.tok_embeddings,
+        norm=dense.norm,
+        lm_head=dense.lm_head,
+        layers=dense.layers[:trunk_depth],
+        mtp_modules=[
+            DeepSeekMtpModule.Config(
+                hidden_norm=RMSNorm.Config(
+                    normalized_shape=dense.dim, param_init=_NORM_INIT
+                ),
+                embedding_norm=RMSNorm.Config(
+                    normalized_shape=dense.dim, param_init=_NORM_INIT
+                ),
+                projection=Linear.Config(
+                    in_features=2 * dense.dim,
+                    out_features=dense.dim,
+                    param_init=_LINEAR_INIT,
+                ),
+                block=block,
+            )
+            for block in dense.layers[trunk_depth:]
+        ],
+    )
+
+
+def deepseek_model_spec(
+    shape_name: str,
+    *,
+    num_modules: int,
+    vocab_size: int,
+    seq_len: int,
+    attn_backend: str = "flex",
+) -> ModelSpec:
+    return ModelSpec(
+        name="mtp_titan_deepseek",
+        flavor=f"{shape_name}_d{num_modules}",
+        model=deepseek_model_config(
+            shape_name,
+            num_modules=num_modules,
+            vocab_size=vocab_size,
+            seq_len=seq_len,
+            attn_backend=attn_backend,
+        ),
+        max_context_length=seq_len,
+        parallelize_fn=parallelize_llama,
+        pipelining_fn=pipeline_llm,
+        post_optimizer_build_fn=None,
+        state_dict_adapter=Llama3StateDictAdapter,
     )
 
 
