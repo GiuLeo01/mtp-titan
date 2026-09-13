@@ -20,7 +20,7 @@ from torchtitan.trainer import Trainer
 from torchtitan.protocols.model_spec import ModelSpec
 
 from .architectures import gloeckle_model_spec, model_spec, SHAPES
-from .loss import GloeckleLoss, GloeckleMemoryEfficientLoss
+from .loss import MtpLoss, MtpMemoryEfficientLoss
 from .metrics import MtpMetricsProcessor
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -191,10 +191,10 @@ def _gloeckle(
     memory_efficient: bool = False,
 ) -> Trainer.Config:
     if memory_efficient:
-        loss = GloeckleMemoryEfficientLoss.Config(global_vocab_size=vocab_size)
+        loss = MtpMemoryEfficientLoss.Config(global_vocab_size=vocab_size)
         variant = "-efficient"
     else:
-        loss = GloeckleLoss.Config(global_vocab_size=vocab_size)
+        loss = MtpLoss.Config(global_vocab_size=vocab_size)
         variant = ""
     return _recipe(
         shape_name,
