@@ -5,7 +5,7 @@ from torchtitan.config import ParallelismConfig
 from torchtitan.distributed.parallel_dims import ParallelDims
 
 from mtp_titan.architectures import gloeckle_model_config, model_config
-from mtp_titan.loss import GloeckleLoss
+from mtp_titan.loss import MtpLoss
 
 SHAPE = "debug"
 VOCAB_SIZE = 512
@@ -21,9 +21,9 @@ requires_cuda = pytest.mark.skipif(
 
 @pytest.fixture(autouse=True)
 def clear_gloeckle_loss_accumulators():
-    GloeckleLoss.head_loss_accumulators.clear()
+    MtpLoss.head_loss_accumulators.clear()
     yield
-    GloeckleLoss.head_loss_accumulators.clear()
+    MtpLoss.head_loss_accumulators.clear()
 
 
 @pytest.fixture

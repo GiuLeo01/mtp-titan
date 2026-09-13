@@ -4,7 +4,7 @@ import torch
 
 from torchtitan.components.loss import CrossEntropyLoss
 
-from mtp_titan.loss import GloeckleLoss
+from mtp_titan.loss import MtpLoss
 
 from .conftest import requires_cuda, VOCAB_SIZE
 from .test_t1_baseline_equivalence import run_forward_backward
@@ -26,7 +26,7 @@ def test_baseline_unaffected_by_gloeckle_usage(
     gloeckle = build_gloeckle(num_heads=2)
     run_forward_backward(
         gloeckle,
-        GloeckleLoss.Config(global_vocab_size=VOCAB_SIZE).build(),
+        MtpLoss.Config(global_vocab_size=VOCAB_SIZE).build(),
         packed_batch,
         parallel_dims,
         parallelism,

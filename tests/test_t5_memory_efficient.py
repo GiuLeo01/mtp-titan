@@ -2,7 +2,7 @@
 
 import torch
 
-from mtp_titan.loss import GloeckleLoss, GloeckleMemoryEfficientLoss
+from mtp_titan.loss import MtpLoss, MtpMemoryEfficientLoss
 
 from .conftest import requires_cuda, VOCAB_SIZE
 
@@ -40,7 +40,7 @@ def test_memory_efficient_matches_naive(
 
     naive_loss, naive_gradients = run_forward_backward(
         naive,
-        GloeckleLoss.Config(global_vocab_size=VOCAB_SIZE).build(),
+        MtpLoss.Config(global_vocab_size=VOCAB_SIZE).build(),
         packed_batch,
         parallel_dims,
         parallelism,
@@ -48,7 +48,7 @@ def test_memory_efficient_matches_naive(
     )
 
     efficient._skip_lm_head = True
-    efficient_loss_fn = GloeckleMemoryEfficientLoss.Config(
+    efficient_loss_fn = MtpMemoryEfficientLoss.Config(
         global_vocab_size=VOCAB_SIZE
     ).build()
     efficient_loss_fn.set_lm_head(efficient.lm_head)
