@@ -52,8 +52,9 @@ GLOECKLE_NUM_HEADS = 2
 DEEPSEEK_NUM_MODULES = 2
 DEEPSEEK_LAMBDA = 0.3
 
-PROFILE_STEPS = 30
-PROFILE_FREQ = 10
+PROFILE_WARMUP_STEPS = 10
+PROFILE_ACTIVE_STEPS = 10
+PROFILE_STEPS = PROFILE_WARMUP_STEPS + PROFILE_ACTIVE_STEPS + 2
 
 STARCODER_SHARD_COUNT = 59
 STARCODER_VALIDATION_SHARDS = (58,)
@@ -372,8 +373,12 @@ def _for_profiling(config: Trainer.Config) -> Trainer.Config:
     config.training.steps = PROFILE_STEPS
     config.profiler = Profiler.Config(
         enable_profiling=True,
-        profile_freq=PROFILE_FREQ,
+        profiler_warmup=PROFILE_WARMUP_STEPS,
+        profiler_active=PROFILE_ACTIVE_STEPS,
+        profile_freq=PROFILE_WARMUP_STEPS + PROFILE_ACTIVE_STEPS,
+        profiler_repeat=1,
         enable_memory_snapshot=True,
+        memory_snapshot_freq=PROFILE_WARMUP_STEPS + PROFILE_ACTIVE_STEPS,
     )
     config.metrics.log_freq = 1
     config.metrics.enable_wandb = False
