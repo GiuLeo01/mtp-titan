@@ -84,14 +84,16 @@ class GloeckleModel(Llama3Model):
         
         h_trunk = self.trunk_hidden_states(tokens, positions, attention_masks)
 
-        logits = []
+        outputs = []
         for mtp_head in self.heads.values():
             h_head = mtp_head(h_trunk, attention_masks, positions)
             h_head = self.norm(h_head)
-            logits_head = self.lm_head(h_head)
-            logits.append(logits_head)
-        
-        return tuple(logits)
+            if self._skip_lm_head:
+                outputs.append(h_head)
+            else:
+                outputs.append(self.lm_head(h_head))
+
+        return tuple(outputs)
 
 
 

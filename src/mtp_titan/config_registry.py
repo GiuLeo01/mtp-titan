@@ -20,7 +20,7 @@ from torchtitan.trainer import Trainer
 from torchtitan.protocols.model_spec import ModelSpec
 
 from .architectures import gloeckle_model_spec, model_spec, SHAPES
-from .loss import GloeckleLoss
+from .loss import GloeckleLoss, GloeckleMemoryEfficientLoss
 from .metrics import MtpMetricsProcessor
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -188,7 +188,14 @@ def _gloeckle(
     validation_dataset: SingleDatasetConfig,
     steps: int,
     seed: int,
+    memory_efficient: bool = False,
 ) -> Trainer.Config:
+    if memory_efficient:
+        loss = GloeckleMemoryEfficientLoss.Config(global_vocab_size=vocab_size)
+        variant = "-efficient"
+    else:
+        loss = GloeckleLoss.Config(global_vocab_size=vocab_size)
+        variant = ""
     return _recipe(
         shape_name,
         spec=gloeckle_model_spec(
@@ -197,8 +204,8 @@ def _gloeckle(
             vocab_size=vocab_size,
             seq_len=SEQ_LEN,
         ),
-        loss=GloeckleLoss.Config(global_vocab_size=vocab_size),
-        run_name=f"gloeckle-{shape_name}-n{num_heads}-seed{seed}",
+        loss=loss,
+        run_name=f"gloeckle-{shape_name}-n{num_heads}{variant}-seed{seed}",
         hf_assets_path=hf_assets_path,
         train_dataset=train_dataset,
         validation_dataset=validation_dataset,
@@ -339,3 +346,39 @@ def gloeckle_57m_n4_profile(seed: int = 0) -> Trainer.Config:
 
 def gloeckle_smoke_profile(seed: int = 0) -> Trainer.Config:
     return _for_profiling(gloeckle_smoke(seed=seed))
+
+
+def gloeckle_57m_efficient(seed: int = 0) -> Trainer.Config:
+    return _gloeckle(
+        "57m",
+        num_heads=GLOECKLE_NUM_HEADS,
+        vocab_size=VOCAB_SIZE,
+        hf_assets_path=TOKENIZER_PATH,
+        train_dataset=STARCODER_PYTHON_TRAIN,
+        validation_dataset=STARCODER_PYTHON_VALIDATION,
+        steps=chinchilla_steps("57m"),
+        seed=seed,
+        memory_efficient=True,
+    )
+
+
+def gloeckle_57m_efficient_profile(seed: int = 0) -> Trainer.Config:
+    return _for_profiling(gloeckle_57m_efficient(seed=seed))
+
+
+def gloeckle_smoke_efficient(seed: int = 0) -> Trainer.Config:
+    config = _gloeckle(
+        "debug",
+        num_heads=GLOECKLE_NUM_HEADS,
+        vocab_size=DEBUG_VOCAB_SIZE,
+        hf_assets_path=DEBUG_TOKENIZER_PATH,
+        train_dataset=SMOKE_CORPUS,
+        validation_dataset=SMOKE_CORPUS,
+        steps=20,
+        seed=seed,
+        memory_efficient=True,
+    )
+    config.parallelism = ParallelismConfig()
+    config.metrics.log_freq = 1
+    config.metrics.enable_wandb = False
+    return config
