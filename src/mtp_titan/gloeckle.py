@@ -18,7 +18,8 @@ from torchtitan.models.utils import (
     quadratic_attention_flops_per_token,
 )
 from torchtitan.protocols.module import Module, ModuleDict
-from torchtitan.components.loss import IGNORE_INDEX
+
+from .targets import mtp_labels
 
 
 class GloeckleModel(Llama3Model):
@@ -145,18 +146,6 @@ class GloeckleModel(Llama3Model):
         base_labels = batch.pop("labels")
         positions = batch.get("positions", None)
 
-        labels_list = [base_labels,]
+        labels = mtp_labels(base_labels, positions, self.num_heads)
 
-        for i in range(1, self.num_heads):
-            shifted_labels = torch.cat([
-                base_labels[i:], torch.full((i,), IGNORE_INDEX, dtype=base_labels.dtype, device=base_labels.device)
-            ])
-
-            new_seqs = torch.where(positions[1:] == 0)[0] + 1
-
-            for j in new_seqs:
-                shifted_labels[(j-i):j] = IGNORE_INDEX 
-
-            labels_list.append(shifted_labels)
-        
-        return inputs, tuple(labels_list), batch
+        return inputs, labels, batch

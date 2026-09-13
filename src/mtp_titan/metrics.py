@@ -6,7 +6,7 @@ from torch.distributed._functional_collectives import all_reduce
 
 from torchtitan.components.metrics import MetricsProcessor
 
-from .loss import GloeckleLoss, TRAIN_HEAD_LOSSES, VALIDATION_HEAD_LOSSES
+from .loss import MtpLoss, TRAIN_HEAD_LOSSES, VALIDATION_HEAD_LOSSES
 
 
 class MtpMetricsProcessor(MetricsProcessor):
@@ -22,7 +22,7 @@ class MtpMetricsProcessor(MetricsProcessor):
     def _per_head_cross_entropy(
         self, accumulator_key: str, prefix: str
     ) -> dict[str, float]:
-        accumulated = GloeckleLoss.drain_head_losses(accumulator_key)
+        accumulated = MtpLoss.drain_head_losses(accumulator_key)
         if accumulated is None:
             return {}
         loss_mesh = self.parallel_dims.get_optional_mesh("loss")

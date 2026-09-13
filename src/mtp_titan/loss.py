@@ -18,14 +18,28 @@ TRAIN_HEAD_LOSSES = "train"
 VALIDATION_HEAD_LOSSES = "validation"
 
 
-class GloeckleLoss(BaseLoss):
-    """Gloeckle et al., ICML 2024, §2, eq. 2: sum of the per-head cross entropies."""
+def resolve_head_weights(
+    head_weights: tuple[float, ...] | None, num_heads: int
+) -> tuple[float, ...]:
+    if head_weights is None:
+        return (1.0,) * num_heads
+    if len(head_weights) != num_heads:
+        raise ValueError(
+            f"expected {num_heads} head weights, got {len(head_weights)}"
+        )
+    return head_weights
+
+
+class MtpLoss(BaseLoss):
+    """Gloeckle et al., ICML 2024, §2, eq. 2; DeepSeek-V3 §2.2, eq. 25:
+    weighted sum of the per-head cross entropies."""
 
     head_loss_accumulators: ClassVar[dict[str, torch.Tensor]] = {}
 
     @dataclass(kw_only=True, slots=True)
     class Config(BaseLoss.Config):
         global_vocab_size: int | None = None
+        head_weights: tuple[float, ...] | None = None
 
     @classmethod
     def drain_head_losses(cls, accumulator_key: str) -> torch.Tensor | None:
@@ -68,6 +82,7 @@ class GloeckleLoss(BaseLoss):
         self.fn = cross_entropy_loss
         self._maybe_compile(compile_config)
         self.global_vocab_size = config.global_vocab_size
+        self.head_weights = config.head_weights
 
     def __call__(
         self,
@@ -77,14 +92,21 @@ class GloeckleLoss(BaseLoss):
         **kwargs: Any,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
 
+        weights = resolve_head_weights(self.head_weights, len(pred))
+
         per_head_losses = []
-        for p, l, in zip(pred, labels):
-            head_loss = self.fn(p, l, global_vocab_size=self.global_vocab_size)
+        for head_pred, head_labels in zip(pred, labels, strict=True):
+            head_loss = self.fn(
+                head_pred, head_labels, global_vocab_size=self.global_vocab_size
+            )
             per_head_losses.append(head_loss)
-        
-        loss = sum(per_head_losses)
 
         self._accumulate_head_losses(per_head_losses, labels)
+
+        loss = sum(
+            weight * head_loss
+            for weight, head_loss in zip(weights, per_head_losses, strict=True)
+        )
 
         if get_spmd_backend() == "spmd_types" and current_spmd_mesh() is not None:
             spmd.assert_type(loss, {"dp": spmd.P, "cp": spmd.P})
@@ -96,7 +118,6 @@ class GloeckleLoss(BaseLoss):
         if global_valid_tokens is not None:
             loss = loss / global_valid_tokens
         return loss, {}
-
 
 
 class _HeadGradientBridge(torch.autograd.Function):
@@ -124,17 +145,19 @@ class _HeadGradientBridge(torch.autograd.Function):
         )
 
 
-class GloeckleMemoryEfficientLoss(ChunkedLossWrapper):
+class MtpMemoryEfficientLoss(ChunkedLossWrapper):
     """Gloeckle et al., ICML 2024, §2: one head's logits live at a time."""
 
     @dataclass(kw_only=True, slots=True)
     class Config(ChunkedLossWrapper.Config):
         global_vocab_size: int | None = None
+        head_weights: tuple[float, ...] | None = None
 
     def __init__(self, config: Config, *, compile_config: CompileConfig | None = None):
         self.fn = cross_entropy_loss
         self._maybe_compile(compile_config)
         self.global_vocab_size = config.global_vocab_size
+        self.head_weights = config.head_weights
         self.lm_head = None
 
     def __call__(
@@ -148,6 +171,8 @@ class GloeckleMemoryEfficientLoss(ChunkedLossWrapper):
         lm_head = self.lm_head
         assert lm_head is not None, "set_lm_head must be called before the first loss"
 
+        weights = resolve_head_weights(self.head_weights, len(pred))
+
         requires_grad = pred[0].requires_grad
         head_inputs = tuple(
             hidden_state.detach().requires_grad_(requires_grad)
@@ -158,13 +183,16 @@ class GloeckleMemoryEfficientLoss(ChunkedLossWrapper):
         per_head_losses: list[torch.Tensor] = []
         accumulated_grads: list[torch.Tensor] = []
 
-        for head_input, head_labels in zip(head_inputs, labels, strict=True):
+        for head_input, head_labels, weight in zip(
+            head_inputs, labels, weights, strict=True
+        ):
             logits = lm_head(head_input)
             head_loss = self.fn(
                 logits, head_labels, global_vocab_size=self.global_vocab_size
             )
             per_head_losses.append(head_loss.detach())
 
+            head_loss = weight * head_loss
             if global_valid_tokens is not None:
                 head_loss = head_loss / global_valid_tokens
             total_loss = total_loss + head_loss.detach()
@@ -174,7 +202,7 @@ class GloeckleMemoryEfficientLoss(ChunkedLossWrapper):
                     head_loss.backward()
                 accumulated_grads.append(head_input.grad)
 
-        GloeckleLoss._accumulate_head_losses(per_head_losses, labels)
+        MtpLoss._accumulate_head_losses(per_head_losses, labels)
 
         if not requires_grad:
             return total_loss, {}
