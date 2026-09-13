@@ -19,12 +19,18 @@ from torchtitan.trainer import Trainer
 
 from torchtitan.protocols.model_spec import ModelSpec
 
-from .architectures import gloeckle_model_spec, model_spec, SHAPES
+from .architectures import (
+    deepseek_model_spec,
+    gloeckle_model_spec,
+    model_spec,
+    SHAPES,
+)
+from .deepseek import deepseek_head_weights
 from .loss import MtpLoss, MtpMemoryEfficientLoss
 from .metrics import MtpMetricsProcessor
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-TORCHTITAN_ROOT = Path(torchtitan.__file__).resolve().parents[1]
+TORCHTITAN_ROOT = Path(torchtitan.trainer.__file__).resolve().parents[1]
 
 SEQ_LEN = 2048
 VOCAB_SIZE = 16384
@@ -42,6 +48,9 @@ DEBUG_TOKENIZER_PATH = str(TORCHTITAN_ROOT / "tests" / "assets" / "tokenizer")
 DEBUG_VOCAB_SIZE = 2048
 
 GLOECKLE_NUM_HEADS = 2
+
+DEEPSEEK_NUM_MODULES = 2
+DEEPSEEK_LAMBDA = 0.3
 
 PROFILE_STEPS = 30
 PROFILE_FREQ = 10
@@ -206,6 +215,47 @@ def _gloeckle(
         ),
         loss=loss,
         run_name=f"gloeckle-{shape_name}-n{num_heads}{variant}-seed{seed}",
+        hf_assets_path=hf_assets_path,
+        train_dataset=train_dataset,
+        validation_dataset=validation_dataset,
+        steps=steps,
+        seed=seed,
+    )
+
+
+def _deepseek(
+    shape_name: str,
+    *,
+    num_modules: int,
+    vocab_size: int,
+    hf_assets_path: str,
+    train_dataset: SingleDatasetConfig,
+    validation_dataset: SingleDatasetConfig,
+    steps: int,
+    seed: int,
+    memory_efficient: bool = False,
+) -> Trainer.Config:
+    head_weights = deepseek_head_weights(num_modules, DEEPSEEK_LAMBDA)
+    if memory_efficient:
+        loss = MtpMemoryEfficientLoss.Config(
+            global_vocab_size=vocab_size, head_weights=head_weights
+        )
+        variant = "-efficient"
+    else:
+        loss = MtpLoss.Config(
+            global_vocab_size=vocab_size, head_weights=head_weights
+        )
+        variant = ""
+    return _recipe(
+        shape_name,
+        spec=deepseek_model_spec(
+            shape_name,
+            num_modules=num_modules,
+            vocab_size=vocab_size,
+            seq_len=SEQ_LEN,
+        ),
+        loss=loss,
+        run_name=f"deepseek-{shape_name}-d{num_modules}{variant}-seed{seed}",
         hf_assets_path=hf_assets_path,
         train_dataset=train_dataset,
         validation_dataset=validation_dataset,
@@ -382,3 +432,81 @@ def gloeckle_smoke_efficient(seed: int = 0) -> Trainer.Config:
     config.metrics.log_freq = 1
     config.metrics.enable_wandb = False
     return config
+
+
+def deepseek_57m(seed: int = 0) -> Trainer.Config:
+    return _deepseek(
+        "57m",
+        num_modules=DEEPSEEK_NUM_MODULES,
+        vocab_size=VOCAB_SIZE,
+        hf_assets_path=TOKENIZER_PATH,
+        train_dataset=STARCODER_PYTHON_TRAIN,
+        validation_dataset=STARCODER_PYTHON_VALIDATION,
+        steps=chinchilla_steps("57m"),
+        seed=seed,
+    )
+
+
+def deepseek_57m_seed1() -> Trainer.Config:
+    return deepseek_57m(seed=1)
+
+
+def deepseek_57m_efficient(seed: int = 0) -> Trainer.Config:
+    return _deepseek(
+        "57m",
+        num_modules=DEEPSEEK_NUM_MODULES,
+        vocab_size=VOCAB_SIZE,
+        hf_assets_path=TOKENIZER_PATH,
+        train_dataset=STARCODER_PYTHON_TRAIN,
+        validation_dataset=STARCODER_PYTHON_VALIDATION,
+        steps=chinchilla_steps("57m"),
+        seed=seed,
+        memory_efficient=True,
+    )
+
+
+def deepseek_smoke(seed: int = 0) -> Trainer.Config:
+    config = _deepseek(
+        "debug",
+        num_modules=DEEPSEEK_NUM_MODULES,
+        vocab_size=DEBUG_VOCAB_SIZE,
+        hf_assets_path=DEBUG_TOKENIZER_PATH,
+        train_dataset=SMOKE_CORPUS,
+        validation_dataset=SMOKE_CORPUS,
+        steps=20,
+        seed=seed,
+    )
+    config.parallelism = ParallelismConfig()
+    config.metrics.log_freq = 1
+    config.metrics.enable_wandb = False
+    return config
+
+
+def deepseek_smoke_efficient(seed: int = 0) -> Trainer.Config:
+    config = _deepseek(
+        "debug",
+        num_modules=DEEPSEEK_NUM_MODULES,
+        vocab_size=DEBUG_VOCAB_SIZE,
+        hf_assets_path=DEBUG_TOKENIZER_PATH,
+        train_dataset=SMOKE_CORPUS,
+        validation_dataset=SMOKE_CORPUS,
+        steps=20,
+        seed=seed,
+        memory_efficient=True,
+    )
+    config.parallelism = ParallelismConfig()
+    config.metrics.log_freq = 1
+    config.metrics.enable_wandb = False
+    return config
+
+
+def deepseek_57m_profile(seed: int = 0) -> Trainer.Config:
+    return _for_profiling(deepseek_57m(seed=seed))
+
+
+def deepseek_57m_efficient_profile(seed: int = 0) -> Trainer.Config:
+    return _for_profiling(deepseek_57m_efficient(seed=seed))
+
+
+def deepseek_smoke_profile(seed: int = 0) -> Trainer.Config:
+    return _for_profiling(deepseek_smoke(seed=seed))

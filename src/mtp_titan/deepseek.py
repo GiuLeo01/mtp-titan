@@ -23,6 +23,16 @@ from torchtitan.protocols.module import Module, ModuleDict
 from .targets import mtp_labels
 
 
+def deepseek_head_weights(
+    num_modules: int, mtp_loss_weight: float
+) -> tuple[float, ...]:
+    """DeepSeek-V3 §2.2, eq. 25: the main model keeps weight 1, the D depths
+    share λ/D."""
+    if num_modules == 0:
+        return (1.0,)
+    return (1.0,) + (mtp_loss_weight / num_modules,) * num_modules
+
+
 class DeepSeekMtpModule(Module):
     """DeepSeek-V3 §2.2, eq. 21-22: one prediction depth."""
 
