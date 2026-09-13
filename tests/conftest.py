@@ -4,7 +4,11 @@ import torch
 from torchtitan.config import ParallelismConfig
 from torchtitan.distributed.parallel_dims import ParallelDims
 
-from mtp_titan.architectures import gloeckle_model_config, model_config
+from mtp_titan.architectures import (
+    deepseek_model_config,
+    gloeckle_model_config,
+    model_config,
+)
 from mtp_titan.loss import MtpLoss
 
 SHAPE = "debug"
@@ -80,6 +84,54 @@ def build_gloeckle(device):
             ),
             device,
         )
+
+    return factory
+
+
+@pytest.fixture
+def build_deepseek(device):
+    def factory(num_modules: int):
+        return _build(
+            deepseek_model_config(
+                SHAPE,
+                num_modules=num_modules,
+                vocab_size=VOCAB_SIZE,
+                seq_len=SEGMENT_LENGTH,
+                attn_backend="flex",
+            ),
+            device,
+        )
+
+    return factory
+
+
+def mtp_model_config(variant: str, num_predictions: int):
+    if variant == "gloeckle":
+        return gloeckle_model_config(
+            SHAPE,
+            num_heads=num_predictions,
+            vocab_size=VOCAB_SIZE,
+            seq_len=SEGMENT_LENGTH,
+            attn_backend="flex",
+        )
+    return deepseek_model_config(
+        SHAPE,
+        num_modules=num_predictions - 1,
+        vocab_size=VOCAB_SIZE,
+        seq_len=SEGMENT_LENGTH,
+        attn_backend="flex",
+    )
+
+
+@pytest.fixture(params=["gloeckle", "deepseek"])
+def mtp_variant(request) -> str:
+    return request.param
+
+
+@pytest.fixture
+def build_mtp(mtp_variant, device):
+    def factory(num_predictions: int):
+        return _build(mtp_model_config(mtp_variant, num_predictions), device)
 
     return factory
 

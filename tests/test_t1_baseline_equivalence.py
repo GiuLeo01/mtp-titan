@@ -1,4 +1,4 @@
-"""T1: with n=1, Gloeckle MTP must reproduce the baseline exactly."""
+"""T1: with a single prediction, MTP must reproduce the baseline exactly."""
 
 import torch
 
@@ -78,3 +78,32 @@ def test_gloeckle_n1_matches_baseline(
     assert set(expected_gradients) == set(gloeckle_gradients)
     for name, expected in expected_gradients.items():
         assert torch.equal(expected, gloeckle_gradients[name])
+
+
+@requires_cuda
+def test_deepseek_d0_matches_baseline(
+    build_baseline, build_deepseek, packed_batch, parallel_dims, parallelism
+):
+    baseline = build_baseline()
+    deepseek = build_deepseek(num_modules=0)
+    deepseek.load_state_dict(baseline.state_dict(), strict=True)
+
+    baseline_loss, baseline_gradients = run_forward_backward(
+        baseline,
+        CrossEntropyLoss.Config(global_vocab_size=VOCAB_SIZE).build(),
+        packed_batch,
+        parallel_dims,
+        parallelism,
+    )
+    deepseek_loss, deepseek_gradients = run_forward_backward(
+        deepseek,
+        MtpLoss.Config(global_vocab_size=VOCAB_SIZE).build(),
+        packed_batch,
+        parallel_dims,
+        parallelism,
+    )
+
+    assert torch.equal(baseline_loss, deepseek_loss)
+    assert set(baseline_gradients) == set(deepseek_gradients)
+    for name, expected in baseline_gradients.items():
+        assert torch.equal(expected, deepseek_gradients[name]), name

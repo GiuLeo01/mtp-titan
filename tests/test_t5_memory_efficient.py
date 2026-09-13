@@ -1,5 +1,6 @@
 """T5: the memory-efficient loss must match the naive one, loss and gradients."""
 
+import pytest
 import torch
 
 from mtp_titan.loss import MtpLoss, MtpMemoryEfficientLoss
@@ -26,12 +27,12 @@ def run_forward_backward(
 
 
 @requires_cuda
+@pytest.mark.parametrize("head_weights", [None, (1.0, 0.15)])
 def test_memory_efficient_matches_naive(
-    build_gloeckle, packed_batch, parallel_dims, parallelism, device
+    build_mtp, head_weights, packed_batch, parallel_dims, parallelism, device
 ):
-    num_heads = 2
-    naive = build_gloeckle(num_heads=num_heads)
-    efficient = build_gloeckle(num_heads=num_heads)
+    naive = build_mtp(2)
+    efficient = build_mtp(2)
     efficient.load_state_dict(naive.state_dict(), strict=True)
 
     global_valid_tokens = torch.tensor(
@@ -40,7 +41,9 @@ def test_memory_efficient_matches_naive(
 
     naive_loss, naive_gradients = run_forward_backward(
         naive,
-        MtpLoss.Config(global_vocab_size=VOCAB_SIZE).build(),
+        MtpLoss.Config(
+            global_vocab_size=VOCAB_SIZE, head_weights=head_weights
+        ).build(),
         packed_batch,
         parallel_dims,
         parallelism,
@@ -49,7 +52,7 @@ def test_memory_efficient_matches_naive(
 
     efficient._skip_lm_head = True
     efficient_loss_fn = MtpMemoryEfficientLoss.Config(
-        global_vocab_size=VOCAB_SIZE
+        global_vocab_size=VOCAB_SIZE, head_weights=head_weights
     ).build()
     efficient_loss_fn.set_lm_head(efficient.lm_head)
 
