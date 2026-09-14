@@ -203,7 +203,5 @@ def speculative_decode(
     end.record()
     torch.cuda.synchronize()
     stats.seconds = start.elapsed_time(end) / 1000.0
-    # the last iteration can produce more than asked for; the surplus is
-    # discarded but its forward is still counted, so alpha is understated
     stats.generated_tokens = min(stats.generated_tokens, max_new_tokens)
     return verified[: prompt.numel() + max_new_tokens], stats

@@ -80,9 +80,6 @@ def main() -> None:
     )
 
     sample = None
-    # flex_attention compiles and autotunes a kernel per shape, and the
-    # sequence grows one token at a time: whichever decoder runs first pays for
-    # all of it. Only the last pass is reported.
     for _ in range(args.repeats):
         greedy_total = None
         speculative_total = None

@@ -14,7 +14,6 @@ from torchtitan.components.optimizer import default_adamw, LRSchedulersContainer
 from torchtitan.components.validate import Validator
 from torchtitan.config import DebugConfig, ParallelismConfig, TrainingConfig
 from torchtitan.hf_datasets.text_datasets import TextProcessor
-from torchtitan.tools.profiler import Profiler
 from torchtitan.trainer import Trainer
 
 from torchtitan.protocols.model_spec import ModelSpec
@@ -28,6 +27,7 @@ from .architectures import (
 from .deepseek import deepseek_head_weights
 from .loss import MtpLoss, MtpMemoryEfficientLoss
 from .metrics import MtpMetricsProcessor
+from .profiler import MtpProfiler
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TORCHTITAN_ROOT = Path(torchtitan.trainer.__file__).resolve().parents[1]
@@ -388,7 +388,8 @@ def gloeckle_57m_seed1() -> Trainer.Config:
 def _for_profiling(config: Trainer.Config) -> Trainer.Config:
     config.parallelism = ParallelismConfig()
     config.training.steps = PROFILE_STEPS
-    config.profiler = Profiler.Config(
+    config.training.disable_cuda_graphs = True
+    config.profiler = MtpProfiler.Config(
         enable_profiling=True,
         profiler_warmup=PROFILE_WARMUP_STEPS,
         profiler_active=PROFILE_ACTIVE_STEPS,
