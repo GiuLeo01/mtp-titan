@@ -9,7 +9,7 @@ from torchtitan.components.data import (
     HuggingFaceStreamingSource,
     SingleDatasetConfig,
 )
-from torchtitan.components.loss import BaseLoss, ChunkedLossWrapper, CrossEntropyLoss
+from torchtitan.components.loss import BaseLoss, CrossEntropyLoss
 from torchtitan.components.optimizer import default_adamw, LRSchedulersContainer
 from torchtitan.components.validate import Validator
 from torchtitan.config import DebugConfig, ParallelismConfig, TrainingConfig
@@ -176,9 +176,7 @@ def _baseline(
     return _recipe(
         shape_name,
         spec=model_spec(shape_name, vocab_size=vocab_size, seq_len=SEQ_LEN),
-        loss=ChunkedLossWrapper.Config(
-            loss_fn=CrossEntropyLoss.Config(global_vocab_size=vocab_size),
-        ),
+        loss=CrossEntropyLoss.Config(global_vocab_size=vocab_size),
         run_name=f"baseline-{shape_name}-seed{seed}",
         hf_assets_path=hf_assets_path,
         train_dataset=train_dataset,
