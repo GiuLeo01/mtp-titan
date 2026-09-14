@@ -330,6 +330,23 @@ def gloeckle_57m(seed: int = 0) -> Trainer.Config:
     )
 
 
+def gloeckle_57m_n3(seed: int = 0) -> Trainer.Config:
+    return _gloeckle(
+        "57m",
+        num_heads=3,
+        vocab_size=VOCAB_SIZE,
+        hf_assets_path=TOKENIZER_PATH,
+        train_dataset=STARCODER_PYTHON_TRAIN,
+        validation_dataset=STARCODER_PYTHON_VALIDATION,
+        steps=chinchilla_steps("57m"),
+        seed=seed,
+    )
+
+
+def gloeckle_57m_n3_seed1() -> Trainer.Config:
+    return gloeckle_57m_n3(seed=1)
+
+
 def gloeckle_57m_n4(seed: int = 0) -> Trainer.Config:
     return _gloeckle(
         "57m",
