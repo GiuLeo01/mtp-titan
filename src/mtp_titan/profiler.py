@@ -6,11 +6,6 @@ from torchtitan.tools.profiler import Profiler
 
 
 class MtpProfiler(Profiler):
-    """torchtitan builds ``torch.profiler.profile`` without ``profile_memory``
-    and does not expose it on its config, so traces carry no allocation events
-    and the TensorBoard Memory view is empty. The flag is consumed when the
-    profiler is prepared, which happens inside the base implementation, so it
-    is injected around that call rather than set afterwards."""
 
     @dataclass(kw_only=True, slots=True)
     class Config(Profiler.Config):
