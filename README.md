@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project integrates into torchtitan two Multi-Token Prediction variants, Gloeckle et al. (ICML 2024) and DeepSeek-V3 (§2.2), to see how much each costs in training and gains in inference. Both come with a memory-efficient version of the loss, which avoids keeping every head's logits in memory at once. The two models were trained at 57M parameters and compared against a baseline, and the resulting checkpoints were used to measure the speculative decoding speedup over autoregressive generation.
+This project integrates into torchtitan two Multi-Token Prediction variants, Gloeckle et al. (ICML 2024) and DeepSeek-V3 (§2.2). Both come with a memory-efficient version of the loss, which avoids keeping every head's logits in memory at once. The two models were trained at 57M parameters and compared against a baseline, and the resulting checkpoints were used to measure the speculative decoding speedup over autoregressive generation.
 
 ## Setup
 
