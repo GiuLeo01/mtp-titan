@@ -168,7 +168,7 @@ From these results it can be observed that:
 
 ## Testing
 
-* **T1**: with a single prediction, MTP must reproduce the baseline bit for bit (loss and gradients), both for Gloeckle and for DeepSeek: verifies that the integration does not alter the dense path.
+* **T1**: with a single prediction, MTP must reproduce the baseline (loss and gradients), both for Gloeckle and for DeepSeek: verifies that the integration does not alter the dense path.
 * **T2**: building a Gloeckle model must have no side effects on the baseline path.
 * **T3**: causality: the loss gradient on a future prediction with respect to a subsequent input must be exactly zero.
 * **T4**: target alignment: prediction k must read the correct shift and zero out at segment boundaries, without the classic off-by-one.
