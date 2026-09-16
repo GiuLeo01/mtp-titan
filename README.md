@@ -120,7 +120,7 @@ Below are presented the training losses of prediction heads 2 and 3, for the Glo
 To note that:
 
 1. Gloeckle's head 3 has a significantly higher loss than head 2 of the same run; this suggests that for Gloeckle, the loss scales negatively with the distance of the prediction head from the base one.
-2. The DeepSeek variant, at least from these runs, does not seem to suffer the same degradation. This could be easily explained, given that, in the DeepSeek variant, the mtp modules receive as input the true future token embedding (teacher forcing, eq. 21), so each head solves an easier problem than the corresponding Gloeckle head, which has to reach t+k from position t alone.
+2. The DeepSeek variant, at least from these runs, does not seem to suffer the same degradation. This could be easily explained, given that, in the DeepSeek variant, the mtp modules receive as input the true future token embedding, so each head solves an easier problem than the corresponding Gloeckle head, which has to reach t+k from position t alone.
 
 | Experiment | Non-emb params | Predictions | Val next-token CE | Val PPL | Val CE @ k=2 | Val CE @ k=3 | tok/s | MFU | Peak allocated |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
